@@ -1,32 +1,105 @@
-import time, cv2
-from threading import Thread
-from djitellopy import Tello
+import cv2
+import socket
+import time
+import threading
 
-tello = Tello()
+def receiveData():
+    global response
+    while True:
+        try:
+            response, _ = clientSocket.recvfrom(1024)
+        except:
+            break
 
-tello.connect()
-time.sleep(1)
-keepRecording = True
-tello.streamon()
-frame_read = tello.get_frame_read()
+def readStates():
+    global battery
+    while True:
+        try:
+            response_state, _ = stateSocket.recvfrom(256)
+            if response_state != 'ok':
+                response_state = response_state.decode('ASCII')
+                list = response_state.replace(';', ':').split(':')
+                battery = int(list[21])
+        except:
+            break
 
-def videoRecorder():
-    height, width, _ = frame_read.frame.shape
-    video = cv2.VideoWriter('video.avi', cv2.VideoWriter_fourcc(*'XVID'), 30, (width, height))
+def sendCommand(command):
+    global response
+    timestamp = int(time.time() * 1000)
 
-    while keepRecording:
-        video.write(frame_read.frame)
-        time.sleep(1/30)
-    
-    video.release()
+    clientSocket.sendto(command.encode('utf-8'), address)
 
-recorder = Thread(target=videoRecorder)
-recorder.start()
-tello.get_battery()
-tello.takeoff()
-time.sleep(100)
-tello.move_up(100)
-tello.rotate_clockwise(360)
-tello.land()
-keepRecording = False
-recorder.join()
+    while response is None:
+        if (time.time() * 1000) - timestamp > 5 * 1000:
+            return False
+    return response
+
+def sendReadCommand(command):
+    response = sendCommand(command)
+    try:
+        response = str(response)
+    except:
+        pass
+    return response
+
+def sendControlCommand(command):
+    response = None
+    for i in range(0,5):
+        response = sendCommand(command)
+        if response == 'OK' or response == 'ok':
+            return True
+    return False
+
+UDP_IP = '192.168.10.1'
+UDP_PORT = 8889
+last_received_command = time.time()
+STATE_UDP_PORT = 8890
+
+address = (UDP_IP, UDP_PORT)
+response = None
+
+clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+clientSocket.bind(('', UDP_PORT))
+
+stateSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+stateSocket.bind(('', STATE_UDP_PORT))
+
+
+recThread = threading.Thread(target=receiveData)
+recThread.daemon = True
+recThread.start()
+
+stateThread = threading.Thread(target=readStates)
+stateThread.daemon = True
+stateThread.start()
+
+response = sendControlCommand("command")
+print(f'command response: {response}')
+response = sendControlCommand("streamon")
+print(f'streamon response: {response}')
+
+print('opening UDP video feed, wait 2 seconds ')
+videoUDP = 'udp://192.168.10.1:11111'
+cap = cv2.VideoCapture(videoUDP)
+time.sleep(2)
+
+battery = 0
+i = 0
+
+while i < 1000:
+    i = i + 1
+    sendReadCommand('battery?')
+    print(f'battery: {battery} % - i: {i}')
+
+    try:
+        ret, frame = cap.read()
+        img = cv2.resize(frame, (640, 480))
+        cv2.imshow('Video footage - DJI TELLO', img)
+    except Exception as e:
+        print(f'exception: {e}')
+        pass
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+response = sendControlCommand("streamoff")
+print(f'streamon response: {response}')

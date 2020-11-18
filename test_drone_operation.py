@@ -1,45 +1,82 @@
-from djitellopy import Tello
+import socket
 import time
+import threading
 
-print("Create Tello Instance")
+def receiveData():
+    global response
+    while True:
+        try:
+            response, _ = clientSocket.recvfrom(1024)
+        except:
+            break
 
-tello = Tello()
+def readStates():
+    global battery
+    while True:
+        try:
+            response_state, _ = stateSocket.recvfrom(256)
+            if response_state != 'ok':
+                response_state = response_state.decode('ASCII')
+                list = response_state.replace(';', ':').split(':')
+                battery = int(list[21])
+        except:
+            break
 
-print("Connect to Tello Drone")
-tello.connect()
+def sendCommand(command):
+    global response
+    timestamp = int(time.time() * 1000)
+
+    clientSocket.sendto(command.encode('utf-8'), address)
+
+    while response is None:
+        if (time.time() * 1000) - timestamp > 5 * 1000:
+            return False
+    return response
+
+def sendReadCommand(command):
+    response = sendCommand(command)
+    try:
+        response = str(response)
+    except:
+        pass
+    return response
+
+def sendControlCommand(command):
+    response = None
+    for i in range(0,5):
+        response = sendCommand(command)
+        if response == 'OK' or response == 'ok':
+            return True
+    return False
+
+UDP_IP = '192.168.10.1'
+UDP_PORT = 8889
+last_received_command = time.time()
+STATE_UDP_PORT = 8890
+
+address = (UDP_IP, UDP_PORT)
+response = None
+
+clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+clientSocket.bind(('', UDP_PORT))
+
+stateSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+stateSocket.bind(('', STATE_UDP_PORT))
 
 
-print("Test 1 - Take off - Rotate - Land")
-tello.takeoff()
-tello.rotate_clockwise(360)
-tello.land()
+recThread = threading.Thread(target=receiveData)
+recThread.daemon = True
+recThread.start()
 
-print("Test 2 - Take off - forward - back - left - right - Land")
-tello.takeoff()
-tello.move_forward(30)
-tello.move_back(30)
-tello.move_left(30)
-tello.move_right(30)
-tello.land()
+stateThread = threading.Thread(target=readStates)
+stateThread.daemon = True
+stateThread.start()
 
-print("Test 3 - Take off - Ascend - Descend - Land")
-tello.takeoff()
-tello.move_up(50)
-tello.move_down(50)
-tello.land()
+battery = 0
 
-print("Test 4 - Telemetry")
-tello.takeoff()
-tello.get_battery()
-tello.get_current_state()
-tello.get_height()
-tello.get_pitch()
-tello.get_roll()
-tello.get_yaw()
-tello.land
+sendControlCommand("command")
 
+sendReadCommand("battery?")
 
-
-
-
-
+time.sleep(5)
+print(f'Battery: {battery} %')
