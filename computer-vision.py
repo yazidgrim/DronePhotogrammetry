@@ -17,7 +17,7 @@ endpoint = "https://dronetest.cognitiveservices.azure.com/"
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
 # Function for analyzing image, gives inferred description, categories, and tags
-def image_analysis(image_path):
+def image_analysis(image_path, searching_object, confidence_threshold):
     local_image = open(image_path, "rb")
     # Call API
     image_analysis = computervision_client.analyze_image_in_stream(local_image,         
@@ -35,6 +35,10 @@ def image_analysis(image_path):
     print("Tags associated with this image:\nTag\t\tConfidence")
     for tag in image_analysis.tags:
         print("{}\t\t{}".format(tag.name, tag.confidence))
+        # keep image if contain desired tag value
+        if (tag.name == searching_object) and (tag.confidence >= confidence_threshold):
+            print("keeping image")
+            return image_path
 
     # Print results with confidence score
     print("Categories from image: ")
@@ -91,7 +95,7 @@ def object_detection(image_path):
             im1.thumbnail((1000,1000), Image.ANTIALIAS)
             im1.save("output.jpeg", "JPEG")
             # im1.show()
-        image_analysis("C:/Users/lisiq.DESKTOP-6HN025I/Documents/Drone/output.jpeg")
+            image_analysis("C:/Users/lisiq.DESKTOP-6HN025I/Documents/Drone/output.jpeg", "chair", 0.9) #modularize!
 
     # plt.axis("off")
     plt.show()
