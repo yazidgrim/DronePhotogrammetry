@@ -40,14 +40,6 @@ def image_analysis(image_path, searching_object, confidence_threshold):
             print("keeping image")
             return image_path
 
-    # Print results with confidence score
-    print("Categories from image: ")
-    if (len(image_analysis.categories) == 0):
-        print("No categories detected.")
-    else:
-        for category in image_analysis.categories:
-            print("'{}' with confidence {:.2f}%".format(category.name, category.score * 100))
-
 # Function for object detection
 def object_detection(image_path):
     local_image_objects = open(image_path, "rb")
