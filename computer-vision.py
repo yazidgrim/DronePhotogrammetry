@@ -1,6 +1,7 @@
 import os
 import sys
 import requests
+import io
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.patches import Rectangle
@@ -15,9 +16,11 @@ subscription_key = "198ed8835a984941bc40400c920fcf90"
 endpoint = "https://dronetest.cognitiveservices.azure.com/"
 
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
+searching_object = "chair"
+confidence_threshold = 0.9
 
 # Function for analyzing image, gives inferred description, categories, and tags
-def image_analysis(image_path, searching_object, confidence_threshold):
+def image_analysis(image_path):
     local_image = open(image_path, "rb")
     # Call API
     image_analysis = computervision_client.analyze_image_in_stream(local_image,         
@@ -89,11 +92,16 @@ def object_detection(image_path):
             image = Image.open(image_path)
             image = fix_orientation(image)
 
-            analysis_result = image_analysis(image_path, "chair", 0.9)
-            if analysis_result != False: # could this be != null?
-                im1 = image.crop((object.rectangle.x, object.rectangle.y, object.rectangle.x + object.rectangle.w, object.rectangle.y + object.rectangle.h))
-                # im1.thumbnail((1000,1000), Image.ANTIALIAS)
-                im1.save("output.jpg", "JPEG")
+            analysis_result = image_analysis(image_path) # need to use this
+            # attempt convert pillow image to io stream
+            # if analysis_result != False: # could this be != null?
+            im1 = image.crop((object.rectangle.x, object.rectangle.y, object.rectangle.x + object.rectangle.w, object.rectangle.y + object.rectangle.h))
+            #     img_byte_arr = io.BytesIO()
+            #     im1.save(img_byte_arr, format='JPEG')
+            #     im1_obj = open(img_byte_arr)
+            #     detect_objects = computervision_client.detect_objects_in_stream(im1_obj)
+            #     print(detect_objects)
+            im1.save("output.jpg", "JPEG")
             # im1.show()
 
     # plt.axis("off")
