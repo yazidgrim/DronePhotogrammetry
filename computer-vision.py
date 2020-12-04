@@ -1,6 +1,7 @@
 import os
 import sys
 import requests
+from datetime import datetime
 import io
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -10,12 +11,10 @@ from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from azure.cognitiveservices.vision.computervision.models import OperationStatusCodes
 from azure.cognitiveservices.vision.computervision.models import VisualFeatureTypes
 from msrest.authentication import CognitiveServicesCredentials
+from credential import *
 
 # client setup
-subscription_key = "198ed8835a984941bc40400c920fcf90"
-endpoint = "https://dronetest.cognitiveservices.azure.com/"
-
-computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
+computervision_client = ComputerVisionClient(ENDPOINT, CognitiveServicesCredentials(SUBSCRIPTION_KEY))
 searching_object = "chair"
 confidence_threshold = 0.9
 
@@ -41,8 +40,8 @@ def image_analysis(image_path):
         if (tag.name in searching_object) and (tag.confidence >= confidence_threshold):
             print("{}\t\t{}".format(tag.name, tag.confidence))
             print("keeping image")
-            return image_path
-    # when detected object is not the one we are searching for
+            return True
+ 
     print("No", searching_object)
     return False
 
@@ -63,6 +62,8 @@ def fix_orientation(image):
 def object_detection(image_path):
     local_image_objects = open(image_path, "rb")
     detect_objects = computervision_client.detect_objects_in_stream(local_image_objects)
+    print("io object")
+    print(local_image_objects)
 
     # read in image to be plotted
     img = mpimg.imread(local_image_objects)
@@ -74,6 +75,7 @@ def object_detection(image_path):
     if len(detect_objects.objects) == 0:
         print("No objects detected.")
     else:
+        file_dir = os.getcwd().replace("\\","/")
         for object in detect_objects.objects:
             # print("Object")
             # print(object)
@@ -89,26 +91,19 @@ def object_detection(image_path):
                                 edgecolor='red',
                                 facecolor='none',
                                 lw=2))
+            # Crop image to the detected object portion only and save
             image = Image.open(image_path)
             image = fix_orientation(image)
+            cropped_img = image.crop((object.rectangle.x, object.rectangle.y, object.rectangle.x + object.rectangle.w, object.rectangle.y + object.rectangle.h))
+            output_image_name = file_dir+"/objects/output_"+str(datetime.now().strftime("%Y%m%d%H%M%S"))+".jpg"
 
-            analysis_result = image_analysis(image_path) # need to use this
-            # attempt convert pillow image to io stream
-            # if analysis_result != False: # could this be != null?
-            im1 = image.crop((object.rectangle.x, object.rectangle.y, object.rectangle.x + object.rectangle.w, object.rectangle.y + object.rectangle.h))
-            #     img_byte_arr = io.BytesIO()
-            #     im1.save(img_byte_arr, format='JPEG')
-            #     im1_obj = open(img_byte_arr)
-            #     detect_objects = computervision_client.detect_objects_in_stream(im1_obj)
-            #     print(detect_objects)
-            im1.save("output.jpg", "JPEG")
-            # im1.show()
+            cropped_img.save(output_image_name, "JPEG")
 
-    # plt.axis("off")
-    plt.show()
+            analysis_result = image_analysis(output_image_name) # need to use this
+            if analysis_result is not False:
+                cropped_img.save(file_dir+"/desired_object/output_"+str(datetime.now().strftime("%Y%m%d%H%M%S"))+".jpg", "JPEG")
 
 local_image_path_objects = "C:/Users/lisiq.DESKTOP-6HN025I/Documents/Drone/full_chair_side_full_other.JPG"
 local_image_objects = open(local_image_path_objects, "rb")
 
 object_detection(local_image_path_objects)
-# image_analysis(local_image_path_objects, "chair", 0.9)
